@@ -1,0 +1,112 @@
+Metadata-Version: 2.1
+Name: scraper-helper
+Version: 0.0.8
+Summary: Helper functions for web scraping
+Home-page: https://github.com/eupendra/scraper-helper
+Author: Upendra Singhai
+Author-email: upendra@coderecode.com
+License: GNU GENERAL PUBLIC LICENSE
+Project-URL: Documentation, https://scraper-helper.readthedocs.io/
+Project-URL: Changelog, https://scraper-helper.readthedocs.io/en/latest/changelog.html
+Project-URL: Issue Tracker, https://github.com/eupendra/scraper-helper/issues
+Platform: UNKNOWN
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)
+Classifier: Operating System :: Unix
+Classifier: Operating System :: POSIX
+Classifier: Operating System :: Microsoft :: Windows
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: Implementation :: CPython
+Classifier: Programming Language :: Python :: Implementation :: PyPy
+Classifier: Topic :: Utilities
+Requires-Python: >=3.6
+
+========
+Overview
+========
+
+
+
+Helper functions for web scraping
+
+* Free software: GNU GENERAL PUBLIC LICENSE
+
+Installation
+============
+
+::
+
+    pip install scraper-helper
+
+You can also install the in-development version with::
+
+    pip install https://github.com/eupendra/scraper-helper/archive/master.zip
+
+
+Documentation
+=============
+
+
+https://scraper-helper.readthedocs.io/
+
+
+Development
+===========
+
+To run all the tests run::
+
+    tox
+
+Note, to combine the coverage data from all the tox environments run:
+
+.. list-table::
+    :widths: 10 90
+    :stub-columns: 1
+
+    - - Windows
+      - ::
+
+            set PYTEST_ADDOPTS=--cov-append
+            tox
+
+    - - Other
+      - ::
+
+            PYTEST_ADDOPTS=--cov-append tox
+
+
+Changelog
+=========
+
+0.0.8 (2021-04-19)
+------------------
+
+* added new function run_spider to run spider quickly
+* Skipped 0.0.7
+
+0.0.6 (2021-02-20)
+------------------
+
+* added new function headers which returns usual browser headers
+
+0.0.5 (2021-01-21)
+------------------
+
+* bug fixes
+
+0.0.4 (2021-01-21)
+------------------
+
+* Minor Enhancements and bug fixes
+
+0.0.2 (2021-01-15)
+------------------
+
+* First release on PyPI.
+
+
