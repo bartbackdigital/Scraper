@@ -60,14 +60,14 @@ endpoint = 'eu.smartproxy.com:10000'
 def proxy_request(url):
     # Correct the proxy format to match the documentation you provided
     proxy = f"http://{username}:{password}@{endpoint}"
-    # proxies = {
-    #     "http": proxy,
-    #     "https": proxy
-    # }
     proxies = {
-        "http": 'http://194.180.238.238:40938',
-        "https": 'http://194.180.238.238:40938'
+        "http": proxy,
+        "https": proxy
     }
+    # proxies = {
+    #     "http": 'http://194.180.238.238:40938',
+    #     "https": 'http://194.180.238.238:40938'
+    # }
     try:
         # Random delay to mimic human behavior and possibly avoid detection.
         time.sleep(random.uniform(1, 5))
