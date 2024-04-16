@@ -12,7 +12,7 @@ import time
 import openai
 
 # Load the API key from an environment variable for security
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# openai.api_key = os.getenv("OPENAI_API_KEY")
 
 user_agents = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -22,8 +22,8 @@ user_agents = [
     # Add more user-agents as needed
 ]
 user_agent = random.choice(user_agents)
-if not openai.api_key:
-    raise ValueError("The OPENAI_API_KEY environment variable is not set.")
+# if not openai.api_key:
+#     raise ValueError("The OPENAI_API_KEY environment variable is not set.")
 
 get_cwd = os.getcwd()
 os.makedirs(f'{get_cwd}/funda_images', exist_ok=True)
@@ -60,9 +60,13 @@ endpoint = 'eu.smartproxy.com:10000'
 def proxy_request(url):
     # Correct the proxy format to match the documentation you provided
     proxy = f"http://{username}:{password}@{endpoint}"
+    # proxies = {
+    #     "http": proxy,
+    #     "https": proxy
+    # }
     proxies = {
-        "http": proxy,
-        "https": proxy
+        "http": 'http://194.180.238.238:40938',
+        "https": 'http://194.180.238.238:40938'
     }
     try:
         # Random delay to mimic human behavior and possibly avoid detection.
@@ -268,7 +272,7 @@ def listingScraper(url):
         description_texts = resp.xpath('//div[@class="object-description-body"]/text() | //h2[contains(text(),"Omschrijving")]/following-sibling::div[1]//text()').getall()
         description = ' '.join(description_texts) if description_texts else ''
         description = scraper_helper.cleanup(description)
-        data['description'] = openAITextGeneration(description)
+        # data['description'] = openAITextGeneration(description)
 
         # Extract and process various fields from the property listing
         data['shortDescription'] = js.get('description', '')
@@ -289,15 +293,15 @@ def listingScraper(url):
         data['acceptance'] = ' '.join(resp.xpath('//dt[contains(text(),"Aanvaarding")]/following-sibling::dd[1]//text()').getall())
         # Add additional fields here as needed...
         # Additional property details extraction
-        data['typeOfHouse'] = resp.xpath('//dt[contains(text(),"Soort woonhuis") or contains(text(),"Type woning")]/following-sibling::dd[1]//text()').get(default='')
-        data['typeOfConstruction'] = resp.xpath('//dt[contains(text(),"Soort bouw")]/following-sibling::dd[1]//text()').get(default='')
-        data['constructionYear'] = resp.xpath('//dt[contains(text(),"Bouwjaar")]/following-sibling::dd[1]//text()').get(default='')
-        data['specifically'] = resp.xpath('//dt[contains(text(),"Specifiek")]/following-sibling::dd[1]//text()').get(default='')
-        data['typeOfRoof'] = resp.xpath('//dt[contains(text(),"Soort dak")]/following-sibling::dd[1]//text()').get(default='')
-        data['numberOfRooms'] = resp.xpath('//dt[contains(text(),"Aantal kamers") or contains(text(),"Kamers")]/following-sibling::dd[1]//text()').get(default='')
-        data['numberOfBathroom'] = resp.xpath('//dt[contains(text(),"Aantal badkamers") or contains(text(),"Badkamers")]/following-sibling::dd[1]//text()').get(default='')
-        data['numberOfFloors'] = resp.xpath('//dt[contains(text(),"Aantal woonlagen") or contains(text(),"Woonlagen")]/following-sibling::dd[1]//text()').get(default='')
-        data['energyLabel'] = resp.xpath('//dt[contains(text(),"Energielabel")]/following-sibling::dd[1]//text()').get(default='')
+        data['typeOfHouse'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Soort woonhuis") or contains(text(),"Type woning")]/following-sibling::dd[1]//text()').getall()))
+        data['typeOfConstruction'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Soort bouw")]/following-sibling::dd[1]//text()').getall()))
+        data['constructionYear'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Bouwjaar")]/following-sibling::dd[1]//text()').getall()))
+        data['specifically'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Specifiek")]/following-sibling::dd[1]//text()').getall()))
+        data['typeOfRoof'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Soort dak")]/following-sibling::dd[1]//text()').getall()))
+        data['numberOfRooms'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Aantal kamers") or contains(text(),"Kamers")]/following-sibling::dd[1]//text()').getall()))
+        data['numberOfBathroom'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Aantal badkamers") or contains(text(),"Badkamers")]/following-sibling::dd[1]//text()').getall()))
+        data['numberOfFloors'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Aantal woonlagen") or contains(text(),"Woonlagen")]/following-sibling::dd[1]//text()').getall()))
+        data['energyLabel'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Energielabel")]/following-sibling::dd[1]//text()').getall()))
         # Handle image processing and link gathering
         image_links = []
         is_first_image = True
@@ -335,7 +339,9 @@ def save_image(img_url, img_id, streetAddress, addressLocality, is_first_image):
         if is_first_image:
             try:
                 img = Image.open(original_image_path)
-                img.thumbnail((500, 500), Image.ANTIALIAS)  # Resize image for thumbnail
+                #ANTIALIAS DEPRECIATED
+                # img.thumbnail((500, 500), Image.ANTIALIAS)  # Resize image for thumbnail
+                img.thumbnail((500, 500), Image.LANCZOS)  # Resize image for thumbnail
                 thumbnail_image_path = os.path.join(base_image_path, f'{img_id}_thumbnail.jpg')
                 img.save(thumbnail_image_path)  # Save the resized image as a thumbnail
                 print(f"Thumbnail saved at {thumbnail_image_path}")
