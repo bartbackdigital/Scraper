@@ -10,6 +10,7 @@ import os
 from PIL import Image
 import time
 import openai
+import uuid
 
 # Load the API key from an environment variable for security
 # openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -285,8 +286,8 @@ def listingScraper(url):
         data['living'] = resp.xpath('//span[contains(text(),"wonen")]/preceding-sibling::span[1]/text()').get(default='')
         data['plot'] = resp.xpath('//span[contains(text(),"perceel")]/preceding-sibling::span[1]/text()').get(default='')
         data['bedrooms'] = resp.xpath('//span[contains(text(),"slaapkamer")]/preceding-sibling::span[1]/text()').get(default='')
-        data['brokerPhone'] = resp.xpath('//a[@data-track-click="Phone Called"]/@href').get(default='')
-        data['brokerName'] = resp.xpath('//h3[@class="object-contact-aanbieder-name"]/a/text()').get(default='')
+        data['brokerPhone'] = resp.xpath('//a[@data-track-click="Phone Called"]/@href | //div[@data-interaction="Object.Tel"]//a[contains(@href,"tel:")]/@href').get(default='')
+        data['brokerName'] = resp.xpath('//h3[@class="object-contact-aanbieder-name"]/a/text() | //h3/a/@title').get(default='')
         data['Asking price per m²'] = resp.xpath('//dt[contains(text(),"Vraagprijs per")]/following-sibling::dd[1]//text()').get(default='')
         data['offeredSince'] = ' '.join(resp.xpath('//dt[contains(text(),"Aangeboden sinds")]/following-sibling::dd[1]//text()').getall())
         data['status'] = ' '.join(resp.xpath('//dt[contains(text(),"Status")]/following-sibling::dd[1]//text()').getall())
@@ -305,16 +306,28 @@ def listingScraper(url):
         # Handle image processing and link gathering
         image_links = []
         is_first_image = True
-        for srow in resp.xpath('//div[@class="media-viewer-fotos__item relative w-full"]/img'):
-            img_url = srow.xpath('./@data-lazy').get()
-            img_id = srow.xpath('./@data-media-id').get()
-            if img_url and img_id:
-                save_image(img_url, img_id, data['streetAddress'], data['addressLocality'], is_first_image)
-                if is_first_image:  # After saving the first image, set is_first_image to False
-                    is_first_image = False
-                image_links.append(img_url)
-
+        if len(resp.xpath('//div[@class="media-viewer-fotos__item relative w-full"]/img').getall()) > 0:
+            for srow in resp.xpath('//div[@class="media-viewer-fotos__item relative w-full"]/img'):
+                img_url = srow.xpath('./@data-lazy').get()
+                img_id = srow.xpath('./@data-media-id').get()
+                if img_url and img_id:
+                    save_image(img_url, img_id, data['streetAddress'], data['addressLocality'], is_first_image)
+                    if is_first_image:  # After saving the first image, set is_first_image to False
+                        is_first_image = False
+                    image_links.append(img_url)
+        else:
+            for srow in js['photo']:
+                i = srow['contentUrl']
+                o = str(uuid.uuid4())
+                if i:
+                    req = sess.get(i, stream=True)
+                    save_image(i,o,data['streetAddress'], data['addressLocality'], is_first_image)
+                    if is_first_image:  # After saving the first image, set is_first_image to False
+                        is_first_image = False
+                    image_links.append(i)
+    
         data['imageLinks'] = ','.join(image_links)
+        
         # Assuming `exporter` function handles data correctly for CSV export
         exporter(data, f'{get_cwd}/funda.csv')
 
@@ -361,3 +374,4 @@ if __name__ == '__main__':
 
     target_url = 'https://www.funda.nl/koop/heel-nederland/kluswoning/'
     listing_urls = urlScraper(target_url)
+        
