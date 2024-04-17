@@ -180,42 +180,43 @@ def imageProcessor(img_id, streetAddress, location):
 
 
 def urlScraper(main_url):
-    url = main_url
-    page = 1
-    while True:
-        # Adjusted to unpack the tuple returned by proxy_request
-        req, resp = proxy_request(url)
-
-        # Check if the request failed and handle accordingly
-        if req is None:
-            print("Failed to scrape the URL due to proxy or network issue.")
-            break  # Or handle the failure in a way that fits your use case
-
-        print(f'page {page}:', req.status_code)
-        
-        # Use resp for further scraping if needed
-        # Note: resp is a Selector object based on your proxy_request function's implementation
-        
-        listing_urls = resp.xpath(
-            '//div[@class="search-result-main-promo"]/a/@href | '
-            '//div[@class="search-result__header-title-col"]/a[1]/@href | '
-            '//h2/parent::a/@href').getall()
-        print(len(listing_urls))
-        
-        for listing_url in listing_urls:
-            print(listing_url)
-            if listing_url not in scraped_data:
-                listingScraper(listing_url)
-        
-        # Assuming you have logic here to determine the URL for the next page and set it to `url`
-        next_page_url = resp.xpath('//a[@rel="next"]/@href').get()
-        if next_page_url:
-            url = f'https://www.funda.nl{next_page_url}'
-        else:
-            break
-
-        page += 1
-
+    # Adjusted to unpack the tuple returned by proxy_request
+    req, resp = proxy_request(main_url)
+    url = req.url
+    print(req.status_code,'page 1')
+    # Use resp for further scraping if needed
+    # Note: resp is a Selector object based on your proxy_request function's implementation
+    
+    listing_urls = resp.xpath(
+        '//div[@class="search-result-main-promo"]/a/@href | '
+        '//div[@class="search-result__header-title-col"]/a[1]/@href | '
+        '//h2/parent::a/@href').getall()
+    print(len(listing_urls))
+    
+    for listing_url in listing_urls:
+        print(listing_url)
+        if listing_url not in scraped_data:
+            listingScraper(listing_url)
+    
+    total_pages = resp.xpath('//ul[@class="pagination"]/li[last()-1]/a/text()').get()
+    print(f'total pages : {total_pages}')
+    if total_pages:
+        for x in range(2,int(total_pages)+1):
+            print(f'{url}&search_result={x}')
+            req, resp = proxy_request(f'{url}&search_result={x}')
+            print(req.status_code,f'page: {x}')
+            listing_urls = resp.xpath(
+                '//div[@class="search-result-main-promo"]/a/@href | '
+                '//div[@class="search-result__header-title-col"]/a[1]/@href | '
+                '//h2/parent::a/@href').getall()
+            print(len(listing_urls))
+            
+            for listing_url in listing_urls:
+                print(listing_url)
+                if listing_url not in scraped_data:
+                    listingScraper(listing_url)
+    
+            
 
 
 
