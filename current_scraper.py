@@ -90,6 +90,7 @@ def proxy_request(url):
         return None, None
 
 
+
 def openAITextGeneration(content):
     print("Original content:", content)
     try:
@@ -112,7 +113,6 @@ def openAITextGeneration(content):
     except Exception as e:
         return content
         # print("An error occurred:", e)
-
 
 
 
@@ -156,6 +156,7 @@ def generateImageNames(streetAddress, location):
         image_int += 1
 
     return newImageName
+
 
 
 def imageProcessor(img_id, streetAddress, location):
@@ -217,8 +218,6 @@ def urlScraper(main_url):
     
             
 
-
-
 def exporter(row, file_name):
     global switch
     if switch:
@@ -229,12 +228,14 @@ def exporter(row, file_name):
             file_name, index=False, mode='a', header=False)
 
 
+
 def getListingId(url):
     url = url.split('/')[-2].split('-')
     if len(url) > 1:
         return url[1]
     else:
         return url[0]
+
 
 
 def dictParser(dic, keys):
@@ -251,6 +252,7 @@ def dictParser(dic, keys):
         return None
 
 
+
 def listingScraper(url):
     time.sleep(random.uniform(1, 5))  # Mimic human-like request interval
     req, resp = proxy_request(url)  # Adjusted to match the return value of `proxy_request`
@@ -259,7 +261,10 @@ def listingScraper(url):
         return
 
     print(url, req.status_code)
-
+    if '/detail/' in url:
+        img_req,img_resp = proxy_request(f'{url}/overzicht')
+        print(f'{url}/overzicht',img_req.status_code)
+    
     raw_js = resp.xpath('//script[@type="application/ld+json" and contains(text(),"address")]/text()').get()
     if raw_js:
         print('scraping data')
@@ -307,7 +312,7 @@ def listingScraper(url):
         image_links = []
         local_image_links = []
         is_first_image = True
-        if len(resp.xpath('//div[@class="media-viewer-fotos__item relative w-full"]/img').getall()) > 0:
+        if '/detail/' not in url:
             for srow in resp.xpath('//div[@class="media-viewer-fotos__item relative w-full"]/img'):
                 img_url = srow.xpath('./@data-lazy').get()
                 img_id = srow.xpath('./@data-media-id').get()
@@ -318,8 +323,7 @@ def listingScraper(url):
                     image_links.append(img_url)
                     local_image_links.append(image_location)
         else:
-            for srow in js['photo']:
-                i = srow['contentUrl']
+            for i in img_resp.xpath('//ul/li/a/img/@src').getall():
                 o = str(uuid.uuid4())
                 if i:
                     req = sess.get(i, stream=True)
@@ -334,6 +338,7 @@ def listingScraper(url):
         
         # Assuming `exporter` function handles data correctly for CSV export
         exporter(data, f'{get_cwd}/funda.csv')
+
 
 
 def save_image(img_url, img_id, streetAddress, addressLocality, is_first_image):
@@ -388,3 +393,4 @@ if __name__ == '__main__':
 
     target_url = 'https://www.funda.nl/koop/heel-nederland/kluswoning/'
     listing_urls = urlScraper(target_url)
+    # listingScraper('https://www.funda.nl/detail/koop/hoeven/huis-st-bernardusstraat-29/89803529')
