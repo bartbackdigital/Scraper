@@ -12,7 +12,7 @@ import uuid
 import openai
 
 # Load the API key from an environment variable for security
-#openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 user_agents = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -22,8 +22,8 @@ user_agents = [
     # Add more user-agents as needed
 ]
 user_agent = random.choice(user_agents)
-#if not openai.api_key:
-    #raise ValueError("The OPENAI_API_KEY environment variable is not set.")
+if not openai.api_key:
+    raise ValueError("The OPENAI_API_KEY environment variable is not set.")
 
 get_cwd = os.getcwd()
 os.makedirs(f'{get_cwd}/funda_images', exist_ok=True)
@@ -278,7 +278,7 @@ def listingScraper(url):
         description_texts = resp.xpath('//div[@class="object-description-body"]/text() | //h2[contains(text(),"Omschrijving")]/following-sibling::div[1]//text()').getall()
         description = ' '.join(description_texts) if description_texts else ''
         description = scraper_helper.cleanup(description)
-        data['description'] = description
+        data['description'] = openAITextGeneration(description)
 
         # Extract and process various fields from the property listing
         data['shortDescription'] = js.get('description', '')
