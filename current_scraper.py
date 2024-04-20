@@ -254,92 +254,95 @@ def dictParser(dic, keys):
 
 
 def listingScraper(url):
-    time.sleep(random.uniform(1, 5))  # Mimic human-like request interval
-    req, resp = proxy_request(url)  # Adjusted to match the return value of `proxy_request`
-    if not req:  # Check if the request was unsuccessful
-        print(f"Failed to scrape {url}")
-        return
+    try:
+        time.sleep(random.uniform(1, 5))  # Mimic human-like request interval
+        req, resp = proxy_request(url)  # Adjusted to match the return value of `proxy_request`
+        if not req:  # Check if the request was unsuccessful
+            print(f"Failed to scrape {url}")
+            return
 
-    print(url, req.status_code)
-    if '/detail/' in url:
-        img_req,img_resp = proxy_request(f'{url}/overzicht')
-        print(f'{url}/overzicht',img_req.status_code)
-    
-    raw_js = resp.xpath('//script[@type="application/ld+json" and contains(text(),"address")]/text()').get()
-    if raw_js:
-        print('scraping data')
-        js = json.loads(raw_js)
-        data = {
-            'url': url,
-            'listing_id': getListingId(url),
-            'listingName': js.get('name', '')
-        }
-
-        description_texts = resp.xpath('//div[@class="object-description-body"]/text() | //h2[contains(text(),"Omschrijving")]/following-sibling::div[1]//text()').getall()
-        description = ' '.join(description_texts) if description_texts else ''
-        description = scraper_helper.cleanup(description)
-        data['description'] = description
-
-        # Extract and process various fields from the property listing
-        data['shortDescription'] = js.get('description', '')
-        data['price'] = dictParser(js, ['offers', 'price'])
-        data['streetAddress'] = dictParser(js, ['address', 'streetAddress'])
-        data['addressLocality'] = dictParser(js, ['address', 'addressLocality'])
-        data['addressRegion'] = dictParser(js, ['address', 'addressRegion'])
-
-        # Process additional property attributes
-        data['living'] = resp.xpath('//span[contains(text(),"wonen")]/preceding-sibling::span[1]/text()').get(default='')
-        data['plot'] = resp.xpath('//span[contains(text(),"perceel")]/preceding-sibling::span[1]/text()').get(default='')
-        data['bedrooms'] = resp.xpath('//span[contains(text(),"slaapkamer")]/preceding-sibling::span[1]/text()').get(default='')
-        data['brokerPhone'] = resp.xpath('//a[@data-track-click="Phone Called"]/@href | //div[@data-interaction="Object.Tel"]//a[contains(@href,"tel:")]/@href').get(default='')
-        data['brokerName'] = resp.xpath('//h3[@class="object-contact-aanbieder-name"]/a/text() | //h3/a/@title').get(default='')
-        data['Asking price per m²'] = resp.xpath('//dt[contains(text(),"Vraagprijs per")]/following-sibling::dd[1]//text()').get(default='')
-        data['offeredSince'] = ' '.join(resp.xpath('//dt[contains(text(),"Aangeboden sinds")]/following-sibling::dd[1]//text()').getall())
-        data['status'] = ' '.join(resp.xpath('//dt[contains(text(),"Status")]/following-sibling::dd[1]//text()').getall())
-        data['acceptance'] = ' '.join(resp.xpath('//dt[contains(text(),"Aanvaarding")]/following-sibling::dd[1]//text()').getall())
-        # Add additional fields here as needed...
-        # Additional property details extraction
-        data['typeOfHouse'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Soort woonhuis") or contains(text(),"Type woning")]/following-sibling::dd[1]//text()').getall()))
-        data['typeOfConstruction'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Soort bouw")]/following-sibling::dd[1]//text()').getall()))
-        data['constructionYear'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Bouwjaar")]/following-sibling::dd[1]//text()').getall()))
-        data['specifically'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Specifiek")]/following-sibling::dd[1]//text()').getall()))
-        data['typeOfRoof'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Soort dak")]/following-sibling::dd[1]//text()').getall()))
-        data['numberOfRooms'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Aantal kamers") or contains(text(),"Kamers")]/following-sibling::dd[1]//text()').getall()))
-        data['numberOfBathroom'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Aantal badkamers") or contains(text(),"Badkamers")]/following-sibling::dd[1]//text()').getall()))
-        data['numberOfFloors'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Aantal woonlagen") or contains(text(),"Woonlagen")]/following-sibling::dd[1]//text()').getall()))
-        data['energyLabel'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Energielabel")]/following-sibling::dd[1]//text()').getall()))
-        # Handle image processing and link gathering
-        image_links = []
-        local_image_links = []
-        is_first_image = True
-        if '/detail/' not in url:
-            for srow in resp.xpath('//div[@class="media-viewer-fotos__item relative w-full"]/img'):
-                img_url = srow.xpath('./@data-lazy').get()
-                img_id = srow.xpath('./@data-media-id').get()
-                if img_url and img_id:
-                    image_location = save_image(img_url, img_id, data['streetAddress'], data['addressLocality'], is_first_image)
-                    if is_first_image:  # After saving the first image, set is_first_image to False
-                        is_first_image = False
-                    image_links.append(img_url)
-                    local_image_links.append(image_location)
-        else:
-            for i in img_resp.xpath('//ul/li/a/img/@src').getall():
-                o = str(uuid.uuid4())
-                if i:
-                    req = sess.get(i, stream=True)
-                    image_location = save_image(i,o,data['streetAddress'], data['addressLocality'], is_first_image)
-                    if is_first_image:  # After saving the first image, set is_first_image to False
-                        is_first_image = False
-                    image_links.append(i)
-                    local_image_links.append(image_location)
-    
-        data['imageLinks'] = ','.join(image_links)
-        data['imageLocations'] = ','.join(local_image_links)
+        print(url, req.status_code)
+        if '/detail/' in url:
+            img_req,img_resp = proxy_request(f'{url}/overzicht')
+            print(f'{url}/overzicht',img_req.status_code)
         
-        # Assuming `exporter` function handles data correctly for CSV export
-        exporter(data, f'{get_cwd}/funda.csv')
+        raw_js = resp.xpath('//script[@type="application/ld+json" and contains(text(),"address")]/text()').get()
+        if raw_js:
+            print('scraping data')
+            js = json.loads(raw_js)
+            data = {
+                'url': url,
+                'listing_id': getListingId(url),
+                'listingName': js.get('name', '')
+            }
 
+            description_texts = resp.xpath('//div[@class="object-description-body"]/text() | //h2[contains(text(),"Omschrijving")]/following-sibling::div[1]//text()').getall()
+            description = ' '.join(description_texts) if description_texts else ''
+            description = scraper_helper.cleanup(description)
+            data['description'] = description
 
+            # Extract and process various fields from the property listing
+            data['shortDescription'] = js.get('description', '')
+            data['price'] = dictParser(js, ['offers', 'price'])
+            data['streetAddress'] = dictParser(js, ['address', 'streetAddress'])
+            data['addressLocality'] = dictParser(js, ['address', 'addressLocality'])
+            data['addressRegion'] = dictParser(js, ['address', 'addressRegion'])
+
+            # Process additional property attributes
+            data['living'] = resp.xpath('//span[contains(text(),"wonen")]/preceding-sibling::span[1]/text()').get(default='')
+            data['plot'] = resp.xpath('//span[contains(text(),"perceel")]/preceding-sibling::span[1]/text()').get(default='')
+            data['bedrooms'] = resp.xpath('//span[contains(text(),"slaapkamer")]/preceding-sibling::span[1]/text()').get(default='')
+            data['brokerPhone'] = resp.xpath('//a[@data-track-click="Phone Called"]/@href | //div[@data-interaction="Object.Tel"]//a[contains(@href,"tel:")]/@href').get(default='')
+            data['brokerName'] = resp.xpath('//h3[@class="object-contact-aanbieder-name"]/a/text() | //h3/a/@title').get(default='')
+            data['Asking price per m²'] = resp.xpath('//dt[contains(text(),"Vraagprijs per")]/following-sibling::dd[1]//text()').get(default='')
+            data['offeredSince'] = ' '.join(resp.xpath('//dt[contains(text(),"Aangeboden sinds")]/following-sibling::dd[1]//text()').getall())
+            data['status'] = ' '.join(resp.xpath('//dt[contains(text(),"Status")]/following-sibling::dd[1]//text()').getall())
+            data['acceptance'] = ' '.join(resp.xpath('//dt[contains(text(),"Aanvaarding")]/following-sibling::dd[1]//text()').getall())
+            # Add additional fields here as needed...
+            # Additional property details extraction
+            data['typeOfHouse'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Soort woonhuis") or contains(text(),"Type woning")]/following-sibling::dd[1]//text()').getall()))
+            data['typeOfConstruction'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Soort bouw")]/following-sibling::dd[1]//text()').getall()))
+            data['constructionYear'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Bouwjaar")]/following-sibling::dd[1]//text()').getall()))
+            data['specifically'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Specifiek")]/following-sibling::dd[1]//text()').getall()))
+            data['typeOfRoof'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Soort dak")]/following-sibling::dd[1]//text()').getall()))
+            data['numberOfRooms'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Aantal kamers") or contains(text(),"Kamers")]/following-sibling::dd[1]//text()').getall()))
+            data['numberOfBathroom'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Aantal badkamers") or contains(text(),"Badkamers")]/following-sibling::dd[1]//text()').getall()))
+            data['numberOfFloors'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Aantal woonlagen") or contains(text(),"Woonlagen")]/following-sibling::dd[1]//text()').getall()))
+            data['energyLabel'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Energielabel")]/following-sibling::dd[1]//text()').getall()))
+            # Handle image processing and link gathering
+            image_links = []
+            local_image_links = []
+            is_first_image = True
+            if '/detail/' not in url:
+                for srow in resp.xpath('//div[@class="media-viewer-fotos__item relative w-full"]/img'):
+                    img_url = srow.xpath('./@data-lazy').get()
+                    img_id = srow.xpath('./@data-media-id').get()
+                    if img_url and img_id:
+                        image_location = save_image(img_url, img_id, data['streetAddress'], data['addressLocality'], is_first_image)
+                        if is_first_image:  # After saving the first image, set is_first_image to False
+                            is_first_image = False
+                        image_links.append(img_url)
+                        local_image_links.append(image_location)
+            else:
+                for i in img_resp.xpath('//ul/li/a/img/@src').getall():
+                    o = str(uuid.uuid4())
+                    if i:
+                        req = sess.get(i, stream=True)
+                        image_location = save_image(i,o,data['streetAddress'], data['addressLocality'], is_first_image)
+                        if is_first_image:  # After saving the first image, set is_first_image to False
+                            is_first_image = False
+                        image_links.append(i)
+                        local_image_links.append(image_location)
+        
+            data['imageLinks'] = ','.join(image_links)
+            data['imageLocations'] = ','.join(local_image_links)
+            
+            # Assuming `exporter` function handles data correctly for CSV export
+            exporter(data, f'{get_cwd}/funda.csv')
+
+    except Exception as e:
+        print(e)
+        exporter({'link':url},f'{get_cwd}/badurls.csv')
 
 def save_image(img_url, img_id, streetAddress, addressLocality, is_first_image):
     response = sess.get(img_url, stream=True)
