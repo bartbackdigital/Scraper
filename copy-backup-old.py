@@ -1,19 +1,20 @@
-
+import os
+import pandas as pd
+import requests
+from PIL import Image
+import time
 import random
 from collections import OrderedDict
 import json
-import pandas as pd
 import scraper_helper
 from scrapy import Selector
-import requests
-import os
-from PIL import Image
-import time
+import uuid
 import openai
 
 # Load the API key from an environment variable for security
-#openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
+start_scraping = False  # Global flag to control scraping activation
 user_agents = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15",
@@ -22,9 +23,9 @@ user_agents = [
     # Add more user-agents as needed
 ]
 user_agent = random.choice(user_agents)
-#if not openai.api_key:
-#    raise ValueError("The OPENAI_API_KEY environment variable is not set.")
-
+if not openai.api_key:
+    raise ValueError("The OPENAI_API_KEY environment variable is not set.")
+start_scraping = False
 get_cwd = os.getcwd()
 os.makedirs(f'{get_cwd}/funda_images', exist_ok=True)
 os.makedirs(f'{get_cwd}/funda_images_processed', exist_ok=True)
@@ -64,6 +65,10 @@ def proxy_request(url):
         "http": proxy,
         "https": proxy
     }
+    # proxies = {
+    #     "http": 'http://194.180.238.238:40938',
+    #     "https": 'http://194.180.238.238:40938'
+    # }
     try:
         # Random delay to mimic human behavior and possibly avoid detection.
         time.sleep(random.uniform(1, 5))
@@ -84,6 +89,7 @@ def proxy_request(url):
         # Delay a bit longer in case of an error before retrying or ending the attempt.
         time.sleep(random.uniform(5, 10))
         return None, None
+
 
 
 def openAITextGeneration(content):
@@ -108,7 +114,6 @@ def openAITextGeneration(content):
     except Exception as e:
         return content
         # print("An error occurred:", e)
-
 
 
 
@@ -154,6 +159,7 @@ def generateImageNames(streetAddress, location):
     return newImageName
 
 
+
 def imageProcessor(img_id, streetAddress, location):
     im = Image.open(f'{get_cwd}/funda_images/{img_id}.jpg')
     w, h = im.size
@@ -175,44 +181,50 @@ def imageProcessor(img_id, streetAddress, location):
 
 
 def urlScraper(main_url):
-    url = main_url
-    page = 1
-    while True:
-        # Adjusted to unpack the tuple returned by proxy_request
-        req, resp = proxy_request(url)
+    global start_scraping
+    # Adjusted to unpack the tuple returned by proxy_request
+    req, resp = proxy_request(main_url)
+    url = req.url
+    print(req.status_code,'page 1')
+    # Use resp for further scraping if needed
+    # Note: resp is a Selector object based on your proxy_request function's implementation
+    
+    listing_urls = resp.xpath(
+        '//div[@class="search-result-main-promo"]/a/@href | '
+        '//div[@class="search-result__header-title-col"]/a[1]/@href | '
+        '//h2/parent::a/@href').getall()
+    print(len(listing_urls))
+    
+    for listing_url in listing_urls:
+        print(listing_url)
+        if start_scraping == False:
+            if listing_url == "https://www.funda.nl/koop/grootebroek/huis-43556829-hoflandstraat-3/":
+                start_scraping = True
+                print("Scraping started")
 
-        # Check if the request failed and handle accordingly
-        if req is None:
-            print("Failed to scrape the URL due to proxy or network issue.")
-            break  # Or handle the failure in a way that fits your use case
-
-        print(f'page {page}:', req.status_code)
-        
-        # Use resp for further scraping if needed
-        # Note: resp is a Selector object based on your proxy_request function's implementation
-        
-        listing_urls = resp.xpath(
-            '//div[@class="search-result-main-promo"]/a/@href | '
-            '//div[@class="search-result__header-title-col"]/a[1]/@href | '
-            '//h2/parent::a/@href').getall()
-        print(len(listing_urls))
-        
-        for listing_url in listing_urls:
-            print(listing_url)
+        if start_scraping == True:
             if listing_url not in scraped_data:
                 listingScraper(listing_url)
-        
-        # Assuming you have logic here to determine the URL for the next page and set it to `url`
-        next_page_url = resp.xpath('//a[@rel="next"]/@href').get()
-        if next_page_url:
-            url = f'https://www.funda.nl{next_page_url}'
-        else:
-            break
-
-        page += 1
-
-
-
+    
+    total_pages = resp.xpath('//ul[@class="pagination"]/li[last()-1]/a/text()').get()
+    print(f'total pages : {total_pages}')
+    if total_pages:
+        for x in range(2,int(total_pages)+1):
+            print(f'{url}&search_result={x}')
+            req, resp = proxy_request(f'{url}&search_result={x}')
+            print(req.status_code,f'page: {x}')
+            listing_urls = resp.xpath(
+                '//div[@class="search-result-main-promo"]/a/@href | '
+                '//div[@class="search-result__header-title-col"]/a[1]/@href | '
+                '//h2/parent::a/@href').getall()
+            print(len(listing_urls))
+            
+            for listing_url in listing_urls:
+                print(listing_url)
+                if listing_url not in scraped_data:
+                    listingScraper(listing_url)
+    
+            
 
 def exporter(row, file_name):
     global switch
@@ -224,12 +236,14 @@ def exporter(row, file_name):
             file_name, index=False, mode='a', header=False)
 
 
+
 def getListingId(url):
     url = url.split('/')[-2].split('-')
     if len(url) > 1:
         return url[1]
     else:
         return url[0]
+
 
 
 def dictParser(dic, keys):
@@ -246,15 +260,24 @@ def dictParser(dic, keys):
         return None
 
 
+
+
 def listingScraper(url):
+    global start_scraping
     time.sleep(random.uniform(1, 5))  # Mimic human-like request interval
+
     req, resp = proxy_request(url)  # Adjusted to match the return value of `proxy_request`
     if not req:  # Check if the request was unsuccessful
         print(f"Failed to scrape {url}")
         return
 
+    # Proceed with your scraping logic if start_scraping is True
     print(url, req.status_code)
+    if '/detail/' in url:
+        img_req, img_resp = proxy_request(f'{url}/overzicht')
+        print(f'{url}/overzicht', img_req.status_code)
 
+    
     raw_js = resp.xpath('//script[@type="application/ld+json" and contains(text(),"address")]/text()').get()
     if raw_js:
         print('scraping data')
@@ -268,7 +291,7 @@ def listingScraper(url):
         description_texts = resp.xpath('//div[@class="object-description-body"]/text() | //h2[contains(text(),"Omschrijving")]/following-sibling::div[1]//text()').getall()
         description = ' '.join(description_texts) if description_texts else ''
         description = scraper_helper.cleanup(description)
-        data['description'] = description
+        data['description'] = openAITextGeneration(description)
 
         # Extract and process various fields from the property listing
         data['shortDescription'] = js.get('description', '')
@@ -281,68 +304,96 @@ def listingScraper(url):
         data['living'] = resp.xpath('//span[contains(text(),"wonen")]/preceding-sibling::span[1]/text()').get(default='')
         data['plot'] = resp.xpath('//span[contains(text(),"perceel")]/preceding-sibling::span[1]/text()').get(default='')
         data['bedrooms'] = resp.xpath('//span[contains(text(),"slaapkamer")]/preceding-sibling::span[1]/text()').get(default='')
-        data['brokerPhone'] = resp.xpath('//a[@data-track-click="Phone Called"]/@href').get(default='')
-        data['brokerName'] = resp.xpath('//h3[@class="object-contact-aanbieder-name"]/a/text()').get(default='')
+        data['brokerPhone'] = resp.xpath('//a[@data-track-click="Phone Called"]/@href | //div[@data-interaction="Object.Tel"]//a[contains(@href,"tel:")]/@href').get(default='')
+        data['brokerName'] = resp.xpath('//h3[@class="object-contact-aanbieder-name"]/a/text() | //h3/a/@title').get(default='')
         data['Asking price per m²'] = resp.xpath('//dt[contains(text(),"Vraagprijs per")]/following-sibling::dd[1]//text()').get(default='')
         data['offeredSince'] = ' '.join(resp.xpath('//dt[contains(text(),"Aangeboden sinds")]/following-sibling::dd[1]//text()').getall())
         data['status'] = ' '.join(resp.xpath('//dt[contains(text(),"Status")]/following-sibling::dd[1]//text()').getall())
         data['acceptance'] = ' '.join(resp.xpath('//dt[contains(text(),"Aanvaarding")]/following-sibling::dd[1]//text()').getall())
         # Add additional fields here as needed...
         # Additional property details extraction
-        data['typeOfHouse'] = resp.xpath('//dt[contains(text(),"Soort woonhuis") or contains(text(),"Type woning")]/following-sibling::dd[1]//text()').get(default='')
-        data['typeOfConstruction'] = resp.xpath('//dt[contains(text(),"Soort bouw")]/following-sibling::dd[1]//text()').get(default='')
-        data['constructionYear'] = resp.xpath('//dt[contains(text(),"Bouwjaar")]/following-sibling::dd[1]//text()').get(default='')
-        data['specifically'] = resp.xpath('//dt[contains(text(),"Specifiek")]/following-sibling::dd[1]//text()').get(default='')
-        data['typeOfRoof'] = resp.xpath('//dt[contains(text(),"Soort dak")]/following-sibling::dd[1]//text()').get(default='')
-        data['numberOfRooms'] = resp.xpath('//dt[contains(text(),"Aantal kamers") or contains(text(),"Kamers")]/following-sibling::dd[1]//text()').get(default='')
-        data['numberOfBathroom'] = resp.xpath('//dt[contains(text(),"Aantal badkamers") or contains(text(),"Badkamers")]/following-sibling::dd[1]//text()').get(default='')
-        data['numberOfFloors'] = resp.xpath('//dt[contains(text(),"Aantal woonlagen") or contains(text(),"Woonlagen")]/following-sibling::dd[1]//text()').get(default='')
-        data['energyLabel'] = resp.xpath('//dt[contains(text(),"Energielabel")]/following-sibling::dd[1]//text()').get(default='')
+        data['typeOfHouse'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Soort woonhuis") or contains(text(),"Type woning")]/following-sibling::dd[1]//text()').getall()))
+        data['typeOfConstruction'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Soort bouw")]/following-sibling::dd[1]//text()').getall()))
+        data['constructionYear'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Bouwjaar")]/following-sibling::dd[1]//text()').getall()))
+        data['specifically'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Specifiek")]/following-sibling::dd[1]//text()').getall()))
+        data['typeOfRoof'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Soort dak")]/following-sibling::dd[1]//text()').getall()))
+        data['numberOfRooms'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Aantal kamers") or contains(text(),"Kamers")]/following-sibling::dd[1]//text()').getall()))
+        data['numberOfBathroom'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Aantal badkamers") or contains(text(),"Badkamers")]/following-sibling::dd[1]//text()').getall()))
+        data['numberOfFloors'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Aantal woonlagen") or contains(text(),"Woonlagen")]/following-sibling::dd[1]//text()').getall()))
+        data['energyLabel'] = scraper_helper.cleanup(' '.join(resp.xpath('//dt[contains(text(),"Energielabel")]/following-sibling::dd[1]//text()').getall()))
         # Handle image processing and link gathering
         image_links = []
+        local_image_links = []
         is_first_image = True
-        for srow in resp.xpath('//div[@class="media-viewer-fotos__item relative w-full"]/img'):
-            img_url = srow.xpath('./@data-lazy').get()
-            img_id = srow.xpath('./@data-media-id').get()
-            if img_url and img_id:
-                save_image(img_url, img_id, data['streetAddress'], data['addressLocality'], is_first_image)
-                if is_first_image:  # After saving the first image, set is_first_image to False
-                    is_first_image = False
-                image_links.append(img_url)
-
+        if '/detail/' not in url:
+            for srow in resp.xpath('//div[@class="media-viewer-fotos__item relative w-full"]/img'):
+                img_url = srow.xpath('./@data-lazy').get()
+                img_id = srow.xpath('./@data-media-id').get()
+                if img_url and img_id:
+                    image_location = save_image(img_url, img_id, data['streetAddress'], data['addressLocality'], is_first_image)
+                    if is_first_image:  # After saving the first image, set is_first_image to False
+                        is_first_image = False
+                    image_links.append(img_url)
+                    local_image_links.append(image_location)
+        else:
+            for i in img_resp.xpath('//ul/li/a/img/@src').getall():
+                o = str(uuid.uuid4())
+                if i:
+                    req = sess.get(i, stream=True)
+                    image_location = save_image(i,o,data['streetAddress'], data['addressLocality'], is_first_image)
+                    if is_first_image:  # After saving the first image, set is_first_image to False
+                        is_first_image = False
+                    image_links.append(i)
+                    local_image_links.append(image_location)
+    
         data['imageLinks'] = ','.join(image_links)
+        data['imageLocations'] = ','.join(local_image_links)
+        
         # Assuming `exporter` function handles data correctly for CSV export
         exporter(data, f'{get_cwd}/funda.csv')
+
 
 
 def save_image(img_url, img_id, streetAddress, addressLocality, is_first_image):
     response = sess.get(img_url, stream=True)
     if response.status_code == 200:
+        # Normalize address locality and street address to create valid directory names
+        normalized_locality = addressLocality.replace(' ', '-')
+        normalized_street = streetAddress.replace(' ', '-')
+
         # Define the base path for saving images
-        base_image_path = f'{get_cwd}/funda_images_processed/{addressLocality}/{streetAddress}'
+        base_image_path = f'{get_cwd}/funda_images_processed/{normalized_locality}/{normalized_street}'
         os.makedirs(base_image_path, exist_ok=True)
 
-        # Define the full path for the original image
-        original_image_path = os.path.join(base_image_path, f'{img_id}.jpg')
+        # Define the full path for the image
+        image_file_name = f'{img_id}.jpg'
+        image_path = os.path.join(base_image_path, image_file_name)
 
-        with open(original_image_path, 'wb') as f:
+        # Save the image
+        with open(image_path, 'wb') as f:
             for chunk in response.iter_content(1024):
                 f.write(chunk)
-        
-        print(f"Image saved at {original_image_path}")
+
+        # Print the save location
+        print(f"Image saved at {image_path}")
 
         # Generate and save thumbnail only for the first image
         if is_first_image:
             try:
-                img = Image.open(original_image_path)
-                img.thumbnail((500, 500), Image.ANTIALIAS)  # Resize image for thumbnail
+                img = Image.open(image_path)
+                img.thumbnail((500, 500), Image.LANCZOS)  # Resize image for thumbnail using LANCZOS algorithm
                 thumbnail_image_path = os.path.join(base_image_path, f'{img_id}_thumbnail.jpg')
                 img.save(thumbnail_image_path)  # Save the resized image as a thumbnail
                 print(f"Thumbnail saved at {thumbnail_image_path}")
             except Exception as e:
                 print(f"Error creating thumbnail: {e}")
+
+        # Return the relative path to be stored in the CSV
+        return f"{normalized_locality}/{normalized_street}/{image_file_name}"
     else:
         print(f"Failed to download image: {img_url}")
+        return None
+
 
 
 
@@ -355,3 +406,4 @@ if __name__ == '__main__':
 
     target_url = 'https://www.funda.nl/koop/heel-nederland/kluswoning/'
     listing_urls = urlScraper(target_url)
+    # listingScraper('https://www.funda.nl/detail/koop/hoeven/huis-st-bernardusstraat-29/89803529')
